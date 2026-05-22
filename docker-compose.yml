@@ -1,0 +1,46 @@
+services:
+  hindsight:
+    container_name: hindsight
+    image: ghcr.io/vectorize-io/hindsight:latest
+    environment:
+      HINDSIGHT_API_DATABASE_URL: postgresql://${POSTGRES_USER:-hindsight}:${POSTGRES_PASSWORD:-hindsight}@postgres:5432/${POSTGRES_DB:-hindsight}
+      HINDSIGHT_API_VECTOR_EXTENSION: pgvector
+      HINDSIGHT_API_WORKER_ID: hindsight
+      HINDSIGHT_API_LLM_PROVIDER: openai-codex
+    volumes:
+      - ${HOME}/.codex:/home/hindsight/.codex
+    ports:
+      - "8888:8888"
+      - "9999:9999"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - hindsight-db
+    restart: unless-stopped
+
+  postgres:
+    container_name: hindsight-postgres
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hindsight}
+      POSTGRES_USER: ${POSTGRES_USER:-hindsight}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hindsight}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hindsight-db
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  hindsight-db:
+    driver: bridge
